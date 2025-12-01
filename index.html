@@ -54,7 +54,7 @@
   </div>
 
   <script>
-    // Contract address you provided:
+    // Your deployed contract address
     const CONTRACT_ADDRESS = "0x406AB5033423Dcb6391Ac9eEEad73294FA82Cfbc";
 
     // ABI you provided
@@ -93,7 +93,9 @@
       }
     ];
 
-    let provider, signer, contract;
+    let provider;
+    let signer;
+    let contract;
 
     const statusDiv = document.getElementById("status");
     const balanceValue = document.getElementById("balanceValue");
@@ -105,65 +107,35 @@
       statusDiv.style.background = error ? "#fdd" : "#eef";
     }
 
-    async function init() {
+    async function initContract() {
       if (!window.ethereum) {
         setStatus("MetaMask is not installed.", true);
-        return;
+        return false;
       }
-
-      provider = new ethers.providers.Web3Provider(window.ethereum);
-      signer = provider.getSigner();
-      contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+      try {
+        provider = new ethers.providers.Web3Provider(window.ethereum);
+        signer = provider.getSigner();
+        contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+        console.log("Contract initialized:", contract.address);
+        return true;
+      } catch (e) {
+        console.error(e);
+        setStatus("Failed to initialize contract: " + e.message, true);
+        return false;
+      }
     }
 
+    // Connect wallet
     document.getElementById("connectButton").onclick = async () => {
       try {
-        const accounts = await ethereum.request({ method: "eth_requestAccounts" });
-        await init();
-        accountInfo.textContent = "Connected: " + accounts[0];
-        setStatus("Wallet connected");
-        refreshBalance();
-      } catch (e) {
-        setStatus("Connection error: " + e.message, true);
-      }
-    };
+        if (!window.ethereum) {
+          setStatus("MetaMask is not installed.", true);
+          return;
+        }
 
-    async function refreshBalance() {
-      try {
-        const bal = await contract.getBalance();
-        balanceValue.textContent = bal.toString();
-      } catch (e) {
-        setStatus("Error fetching balance: " + e.message, true);
-      }
-    }
+        const accounts = await window.ethereum.request({
+          method: "eth_requestAccounts"
+        });
 
-    document.getElementById("refreshBalanceButton").onclick = refreshBalance;
-
-    document.getElementById("increaseButton").onclick = async () => {
-      try {
-        const amt = amountInput.value;
-        const tx = await contract.increase(amt);
-        setStatus("Waiting for transaction...");
-        await tx.wait();
-        setStatus("Increase completed");
-        refreshBalance();
-      } catch (e) {
-        setStatus("Increase error: " + e.message, true);
-      }
-    };
-
-    document.getElementById("decreaseButton").onclick = async () => {
-      try {
-        const amt = amountInput.value;
-        const tx = await contract.decrease(amt);
-        setStatus("Waiting for transaction...");
-        await tx.wait();
-        setStatus("Decrease completed");
-        refreshBalance();
-      } catch (e) {
-        setStatus("Decrease error: " + e.message, true);
-      }
-    };
-  </script>
-</body>
-</html>
+        const ok = await initContract();
+        if (!ok) return;
