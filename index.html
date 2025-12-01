@@ -5,8 +5,8 @@
   <title>SC220504544 Balance DApp</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- FIXED: Correct ethers.js UMD build -->
-  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+  <!-- Local ethers.js file (must be in same folder as index.html) -->
+  <script src="./ethers.umd.min.js"></script>
 
   <style>
     body { font-family: Arial; background: #f4f4f4; padding: 20px; }
@@ -56,6 +56,12 @@
   </div>
 
   <script>
+    // ===== DEBUG: check if ethers is loaded =====
+    console.log("window.ethers =", window.ethers);
+    if (typeof window.ethers === "undefined") {
+      alert("ethers.js did NOT load. Check that ethers.umd.min.js is in the SAME folder as index.html.");
+    }
+
     const CONTRACT_ADDRESS = "0x406AB5033423Dcb6391Ac9eEEad73294FA82Cfbc";
 
     const CONTRACT_ABI = [
@@ -77,32 +83,56 @@
     }
 
     async function init() {
+      if (!window.ethereum) {
+        setStatus("MetaMask / Ethereum provider not found in browser.", true);
+        return false;
+      }
+      if (typeof window.ethers === "undefined") {
+        setStatus("ethers.js is not loaded. Check the script tag / file path.", true);
+        return false;
+      }
+
       provider = new ethers.providers.Web3Provider(window.ethereum);
       signer = provider.getSigner();
       contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+      console.log("Contract initialized at:", contract.address);
+      return true;
     }
 
     document.getElementById("connectButton").onclick = async () => {
       try {
+        if (!window.ethereum) {
+          setStatus("MetaMask is not installed.", true);
+          return;
+        }
+
+        // This should trigger the MetaMask popup
         await window.ethereum.request({ method: "eth_requestAccounts" });
 
-        await init();
+        const ok = await init();
+        if (!ok) return;
 
         const address = await signer.getAddress();
         accountInfo.textContent = "Connected: " + address;
 
         setStatus("Wallet connected");
-        refreshBalance();
+        await refreshBalance();
       } catch (err) {
+        console.error(err);
         setStatus("Connection error: " + err.message, true);
       }
     };
 
     async function refreshBalance() {
+      if (!contract) {
+        setStatus("Contract not initialized yet. Connect your wallet first.", true);
+        return;
+      }
       try {
         const bal = await contract.getBalance();
         balanceValue.textContent = bal.toString();
       } catch (err) {
+        console.error(err);
         setStatus("Error fetching balance: " + err.message, true);
       }
     }
@@ -110,27 +140,42 @@
     document.getElementById("refreshBalanceButton").onclick = refreshBalance;
 
     document.getElementById("increaseButton").onclick = async () => {
+      if (!contract) {
+        setStatus("Contract not initialized yet. Connect your wallet first.", true);
+        return;
+      }
       try {
         const amt = document.getElementById("amountInput").value;
         const tx = await contract.increase(amt);
+        setStatus("Sending increase() transaction...");
         await tx.wait();
-        refreshBalance();
+        setStatus("Increase completed.");
+        await refreshBalance();
       } catch (err) {
-        setStatus("Increase error: " + err.message, true);
+        console.error(err);
+        setStatus("Increase error: " + (err.data?.message || err.message), true);
       }
     };
 
     document.getElementById("decreaseButton").onclick = async () => {
+      if (!contract) {
+        setStatus("Contract not initialized yet. Connect your wallet first.", true);
+        return;
+      }
       try {
         const amt = document.getElementById("amountInput").value;
         const tx = await contract.decrease(amt);
+        setStatus("Sending decrease() transaction...");
         await tx.wait();
-        refreshBalance();
+        setStatus("Decrease completed.");
+        await refreshBalance();
       } catch (err) {
-        setStatus("Decrease error: " + err.message, true);
+        console.error(err);
+        setStatus("Decrease error: " + (err.data?.message || err.message), true);
       }
     };
   </script>
 
 </body>
 </html>
+
