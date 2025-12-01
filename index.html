@@ -4,10 +4,12 @@
   <meta charset="UTF-8" />
   <title>SC220504544 Balance DApp</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.min.js"></script>
+
+  <!-- FIXED: Correct ethers.js UMD build -->
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
 
   <style>
-    body { font-family: Arial, sans-serif; background: #f4f4f4; padding: 20px; }
+    body { font-family: Arial; background: #f4f4f4; padding: 20px; }
     .container {
       max-width: 500px; margin: auto; background: #fff; padding: 20px;
       border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
@@ -18,10 +20,10 @@
     }
     button.secondary { background: #6c757d; }
     input {
-      width: 100%; padding: 10px; margin-top: 6px; box-sizing: border-box;
+      width: 100%; padding: 10px; margin-top: 6px;
       border: 1px solid #ccc; border-radius: 6px;
     }
-    .status { padding: 10px; margin-top: 10px; background: #eef; border-radius: 6px; min-height: 20px; }
+    .status { padding: 10px; margin-top: 10px; background: #eef; border-radius: 6px; }
     .balance-display { font-size: 20px; font-weight: bold; margin-top: 10px; }
   </style>
 </head>
@@ -33,14 +35,14 @@
     <button id="connectButton">Connect Wallet</button>
     <div id="accountInfo"></div>
 
-    <hr>
+    <hr />
 
     <div class="balance-display">
       Balance: <span id="balanceValue">-</span>
     </div>
     <button id="refreshBalanceButton" class="secondary">Refresh Balance</button>
 
-    <hr>
+    <hr />
 
     <label>Amount</label>
     <input id="amountInput" type="number" min="0" placeholder="Enter amount" />
@@ -54,88 +56,81 @@
   </div>
 
   <script>
-    // Your deployed contract address
     const CONTRACT_ADDRESS = "0x406AB5033423Dcb6391Ac9eEEad73294FA82Cfbc";
 
-    // ABI you provided
     const CONTRACT_ABI = [
-      {
-        "inputs": [],
-        "stateMutability": "nonpayable",
-        "type": "constructor"
-      },
-      {
-        "inputs": [
-          { "internalType": "uint256", "name": "amount", "type": "uint256" }
-        ],
-        "name": "decrease",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-      },
-      {
-        "inputs": [],
-        "name": "getBalance",
-        "outputs": [
-          { "internalType": "uint256", "name": "", "type": "uint256" }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-      },
-      {
-        "inputs": [
-          { "internalType": "uint256", "name": "amount", "type": "uint256" }
-        ],
-        "name": "increase",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-      }
+      {"inputs":[],"stateMutability":"nonpayable","type":"constructor"},
+      {"inputs":[{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"decrease","outputs":[],"stateMutability":"nonpayable","type":"function"},
+      {"inputs":[],"name":"getBalance","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+      {"inputs":[{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"increase","outputs":[],"stateMutability":"nonpayable","type":"function"}
     ];
 
-    let provider;
-    let signer;
-    let contract;
+    let provider, signer, contract;
 
     const statusDiv = document.getElementById("status");
     const balanceValue = document.getElementById("balanceValue");
-    const amountInput = document.getElementById("amountInput");
     const accountInfo = document.getElementById("accountInfo");
 
-    function setStatus(msg, error = false) {
+    function setStatus(msg, err=false) {
       statusDiv.textContent = msg;
-      statusDiv.style.background = error ? "#fdd" : "#eef";
+      statusDiv.style.background = err ? "#fdd" : "#eef";
     }
 
-    async function initContract() {
-      if (!window.ethereum) {
-        setStatus("MetaMask is not installed.", true);
-        return false;
-      }
-      try {
-        provider = new ethers.providers.Web3Provider(window.ethereum);
-        signer = provider.getSigner();
-        contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
-        console.log("Contract initialized:", contract.address);
-        return true;
-      } catch (e) {
-        console.error(e);
-        setStatus("Failed to initialize contract: " + e.message, true);
-        return false;
-      }
+    async function init() {
+      provider = new ethers.providers.Web3Provider(window.ethereum);
+      signer = provider.getSigner();
+      contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
     }
 
-    // Connect wallet
     document.getElementById("connectButton").onclick = async () => {
       try {
-        if (!window.ethereum) {
-          setStatus("MetaMask is not installed.", true);
-          return;
-        }
+        await window.ethereum.request({ method: "eth_requestAccounts" });
 
-        const accounts = await window.ethereum.request({
-          method: "eth_requestAccounts"
-        });
+        await init();
 
-        const ok = await initContract();
-        if (!ok) return;
+        const address = await signer.getAddress();
+        accountInfo.textContent = "Connected: " + address;
+
+        setStatus("Wallet connected");
+        refreshBalance();
+      } catch (err) {
+        setStatus("Connection error: " + err.message, true);
+      }
+    };
+
+    async function refreshBalance() {
+      try {
+        const bal = await contract.getBalance();
+        balanceValue.textContent = bal.toString();
+      } catch (err) {
+        setStatus("Error fetching balance: " + err.message, true);
+      }
+    }
+
+    document.getElementById("refreshBalanceButton").onclick = refreshBalance;
+
+    document.getElementById("increaseButton").onclick = async () => {
+      try {
+        const amt = document.getElementById("amountInput").value;
+        const tx = await contract.increase(amt);
+        await tx.wait();
+        refreshBalance();
+      } catch (err) {
+        setStatus("Increase error: " + err.message, true);
+      }
+    };
+
+    document.getElementById("decreaseButton").onclick = async () => {
+      try {
+        const amt = document.getElementById("amountInput").value;
+        const tx = await contract.decrease(amt);
+        await tx.wait();
+        refreshBalance();
+      } catch (err) {
+        setStatus("Decrease error: " + err.message, true);
+      }
+    };
+  </script>
+
+</body>
+</html>
