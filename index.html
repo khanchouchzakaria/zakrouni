@@ -1,181 +1,241 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>SC220504544 Balance DApp</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <title>My Sepolia dApp</title>
 
-  <!-- Local ethers.js file (must be in same folder as index.html) -->
-  <script src="./ethers.umd.min.js"></script>
+  <!-- Ethers.js v6 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.11.1/ethers.umd.min.js"></script>
 
   <style>
-    body { font-family: Arial; background: #f4f4f4; padding: 20px; }
-    .container {
-      max-width: 500px; margin: auto; background: #fff; padding: 20px;
-      border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 40px auto;
+      padding: 25px;
+      border: 1px solid #ddd;
+      border-radius: 10px;
     }
     button {
-      padding: 10px 16px; margin: 5px; border: none; cursor: pointer;
-      border-radius: 6px; background: #007bff; color: #fff;
+      padding: 10px 16px;
+      margin-top: 6px;
+      cursor: pointer;
     }
-    button.secondary { background: #6c757d; }
     input {
-      width: 100%; padding: 10px; margin-top: 6px;
-      border: 1px solid #ccc; border-radius: 6px;
+      padding: 8px;
+      width: 100%;
+      margin-top: 4px;
+      box-sizing: border-box;
     }
-    .status { padding: 10px; margin-top: 10px; background: #eef; border-radius: 6px; }
-    .balance-display { font-size: 20px; font-weight: bold; margin-top: 10px; }
+    #status {
+      margin-top: 15px;
+      min-height: 20px;
+      color: #444;
+    }
   </style>
 </head>
-
 <body>
-  <div class="container">
-    <h2>SC220504544 Balance DApp</h2>
 
-    <button id="connectButton">Connect Wallet</button>
-    <div id="accountInfo"></div>
+  <h2>My Sepolia dApp</h2>
 
-    <hr />
+  <button id="connect">Connect MetaMask</button>
+  <p>Account: <span id="account">Not connected</span></p>
 
-    <div class="balance-display">
-      Balance: <span id="balanceValue">-</span>
-    </div>
-    <button id="refreshBalanceButton" class="secondary">Refresh Balance</button>
+  <hr>
 
-    <hr />
+  <h3>My Balance</h3>
+  <p><span id="balance">0</span> ETH</p>
+  <button id="refreshBalance">Refresh Balance</button>
 
-    <label>Amount</label>
-    <input id="amountInput" type="number" min="0" placeholder="Enter amount" />
+  <hr>
 
-    <div>
-      <button id="increaseButton">Increase</button>
-      <button id="decreaseButton">Decrease</button>
-    </div>
+  <h3>Deposit</h3>
+  <input id="depositAmount" type="number" placeholder="Amount in ETH" step="0.0001">
+  <button id="depositBtn">Deposit</button>
 
-    <div id="status" class="status"></div>
-  </div>
+  <hr>
+
+  <h3>Withdraw</h3>
+  <input id="withdrawAmount" type="number" placeholder="Amount in ETH" step="0.0001">
+  <button id="withdrawBtn">Withdraw</button>
+
+  <div id="status"></div>
 
   <script>
-    // ===== DEBUG: check if ethers is loaded =====
-    console.log("window.ethers =", window.ethers);
-    if (typeof window.ethers === "undefined") {
-      alert("ethers.js did NOT load. Check that ethers.umd.min.js is in the SAME folder as index.html.");
-    }
+    /********************************************
+     * Contract Address
+     ********************************************/
+    const CONTRACT_ADDRESS = "0x8D383091126C1C60e474F324EddFb67bF248c990";
 
-    const CONTRACT_ADDRESS = "0x406AB5033423Dcb6391Ac9eEEad73294FA82Cfbc";
-
+    /********************************************
+     * ABI
+     ********************************************/
     const CONTRACT_ABI = [
-      {"inputs":[],"stateMutability":"nonpayable","type":"constructor"},
-      {"inputs":[{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"decrease","outputs":[],"stateMutability":"nonpayable","type":"function"},
-      {"inputs":[],"name":"getBalance","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-      {"inputs":[{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"increase","outputs":[],"stateMutability":"nonpayable","type":"function"}
+      {
+        "inputs": [],
+        "name": "deposit",
+        "outputs": [],
+        "stateMutability": "payable",
+        "type": "function"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          { "indexed": true, "internalType": "address", "name": "user", "type": "address" },
+          { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" }
+        ],
+        "name": "Deposited",
+        "type": "event"
+      },
+      {
+        "inputs": [
+          { "internalType": "uint256", "name": "amount", "type": "uint256" }
+        ],
+        "name": "withdraw",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          { "indexed": true, "internalType": "address", "name": "user", "type": "address" },
+          { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" }
+        ],
+        "name": "Withdrawn",
+        "type": "event"
+      },
+      {
+        "inputs": [
+          { "internalType": "address", "name": "user", "type": "address" }
+        ],
+        "name": "balanceOf",
+        "outputs": [
+          { "internalType": "uint256", "name": "", "type": "uint256" }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "contractBalance",
+        "outputs": [
+          { "internalType": "uint256", "name": "", "type": "uint256" }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "myBalance",
+        "outputs": [
+          { "internalType": "uint256", "name": "", "type": "uint256" }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      }
     ];
 
     let provider, signer, contract;
 
+    const connectBtn = document.getElementById("connect");
+    const accountSpan = document.getElementById("account");
+    const balanceSpan = document.getElementById("balance");
+    const refreshBtn = document.getElementById("refreshBalance");
+    const depositInput = document.getElementById("depositAmount");
+    const depositBtn = document.getElementById("depositBtn");
+    const withdrawInput = document.getElementById("withdrawAmount");
+    const withdrawBtn = document.getElementById("withdrawBtn");
     const statusDiv = document.getElementById("status");
-    const balanceValue = document.getElementById("balanceValue");
-    const accountInfo = document.getElementById("accountInfo");
 
-    function setStatus(msg, err=false) {
+    function setStatus(msg) {
+      console.log(msg);
       statusDiv.textContent = msg;
-      statusDiv.style.background = err ? "#fdd" : "#eef";
     }
 
-    async function init() {
-      if (!window.ethereum) {
-        setStatus("MetaMask / Ethereum provider not found in browser.", true);
-        return false;
-      }
-      if (typeof window.ethers === "undefined") {
-        setStatus("ethers.js is not loaded. Check the script tag / file path.", true);
-        return false;
-      }
+    // Connect MetaMask
+    connectBtn.onclick = async () => {
+      if (!window.ethereum) return alert("MetaMask not installed.");
 
-      provider = new ethers.providers.Web3Provider(window.ethereum);
-      signer = provider.getSigner();
-      contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
-      console.log("Contract initialized at:", contract.address);
-      return true;
-    }
-
-    document.getElementById("connectButton").onclick = async () => {
       try {
-        if (!window.ethereum) {
-          setStatus("MetaMask is not installed.", true);
-          return;
-        }
+        await ethereum.request({ method: "eth_requestAccounts" });
 
-        // This should trigger the MetaMask popup
-        await window.ethereum.request({ method: "eth_requestAccounts" });
-
-        const ok = await init();
-        if (!ok) return;
+        provider = new ethers.BrowserProvider(window.ethereum);
+        signer = await provider.getSigner();
+        contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
 
         const address = await signer.getAddress();
-        accountInfo.textContent = "Connected: " + address;
+        accountSpan.textContent = address;
 
-        setStatus("Wallet connected");
-        await refreshBalance();
-      } catch (err) {
-        console.error(err);
-        setStatus("Connection error: " + err.message, true);
+        setStatus("Connected!");
+        refreshBalance();
+      } catch (error) {
+        console.error(error);
+        setStatus("Error connecting MetaMask");
       }
     };
 
+    // Refresh balance
     async function refreshBalance() {
-      if (!contract) {
-        setStatus("Contract not initialized yet. Connect your wallet first.", true);
-        return;
-      }
+      if (!contract) return setStatus("Connect wallet first");
+
       try {
-        const bal = await contract.getBalance();
-        balanceValue.textContent = bal.toString();
-      } catch (err) {
-        console.error(err);
-        setStatus("Error fetching balance: " + err.message, true);
+        const balanceWei = await contract.myBalance();
+        const balanceEth = ethers.formatEther(balanceWei);
+        balanceSpan.textContent = balanceEth;
+        setStatus("Balance updated");
+      } catch (error) {
+        console.error(error);
+        setStatus("Failed to fetch balance");
       }
     }
 
-    document.getElementById("refreshBalanceButton").onclick = refreshBalance;
+    refreshBtn.onclick = refreshBalance;
 
-    document.getElementById("increaseButton").onclick = async () => {
-      if (!contract) {
-        setStatus("Contract not initialized yet. Connect your wallet first.", true);
-        return;
-      }
+    // Deposit
+    depositBtn.onclick = async () => {
+      if (!contract) return setStatus("Connect wallet first");
+
+      const amount = depositInput.value;
+      if (!amount || Number(amount) <= 0) return setStatus("Enter valid amount");
+
       try {
-        const amt = document.getElementById("amountInput").value;
-        const tx = await contract.increase(amt);
-        setStatus("Sending increase() transaction...");
+        const tx = await contract.deposit({ value: ethers.parseEther(amount) });
+        setStatus("Waiting for confirmation...");
         await tx.wait();
-        setStatus("Increase completed.");
-        await refreshBalance();
-      } catch (err) {
-        console.error(err);
-        setStatus("Increase error: " + (err.data?.message || err.message), true);
+        setStatus("Deposit successful!");
+        refreshBalance();
+      } catch (error) {
+        console.error(error);
+        setStatus("Deposit failed");
       }
     };
 
-    document.getElementById("decreaseButton").onclick = async () => {
-      if (!contract) {
-        setStatus("Contract not initialized yet. Connect your wallet first.", true);
-        return;
-      }
+    // Withdraw
+    withdrawBtn.onclick = async () => {
+      if (!contract) return setStatus("Connect wallet first");
+
+      const amount = withdrawInput.value;
+      if (!amount || Number(amount) <= 0) return setStatus("Enter valid amount");
+
       try {
-        const amt = document.getElementById("amountInput").value;
-        const tx = await contract.decrease(amt);
-        setStatus("Sending decrease() transaction...");
+        const tx = await contract.withdraw(ethers.parseEther(amount));
+        setStatus("Waiting for confirmation...");
         await tx.wait();
-        setStatus("Decrease completed.");
-        await refreshBalance();
-      } catch (err) {
-        console.error(err);
-        setStatus("Decrease error: " + (err.data?.message || err.message), true);
+        setStatus("Withdraw successful!");
+        refreshBalance();
+      } catch (error) {
+        console.error(error);
+        setStatus("Withdraw failed");
       }
     };
+
+    // Auto-reload on account / network change
+    if (window.ethereum) {
+      window.ethereum.on("accountsChanged", () => location.reload());
+      window.ethereum.on("chainChanged", () => location.reload());
+    }
   </script>
-
 </body>
 </html>
-
